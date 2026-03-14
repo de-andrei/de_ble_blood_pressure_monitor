@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -19,18 +18,18 @@ from .const import (
     DEVICE_MODEL,
     SCAN_INTERVAL,
 )
-from .bp_ble import BloodPressureMonitor
+from .ble_device import BloodPressureMonitor
 
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.setLevel(logging.WARNING)
 
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "text_sensor", "binary_sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up DE BLE Blood Pressure Monitor from a config entry."""
     address = entry.data[CONF_ADDRESS]
     
-    coordinator = BloodPressureCoordinator(hass, address, entry.entry_id)
+    coordinator = BPCoordinator(hass, address, entry.entry_id)
     await coordinator.async_setup()
     
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
@@ -61,7 +60,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
     return True
 
-class BloodPressureCoordinator:
+class BPCoordinator:
     """Coordinator for Blood Pressure Monitor BLE."""
     
     def __init__(self, hass: HomeAssistant, address: str, entry_id: str) -> None:
@@ -76,8 +75,8 @@ class BloodPressureCoordinator:
         self._map = 0
         self._pulse = 0
         self._user_id = 0
-        self._measurement_time = ""
-        self._last_seen: float | None = None
+        self._timestamp = None
+        self._measurement_complete = False
         self._cancel_scan: callable | None = None
         self._connecting = False
         self._shutdown = False
@@ -139,46 +138,35 @@ class BloodPressureCoordinator:
             async_dispatcher_send(
                 self.hass, f"{DOMAIN}_{self.entry_id}_update", "user_id", data
             )
-        elif source == "measurement_time":
-            self._measurement_time = data
+        elif source == "timestamp":
+            self._timestamp = data
             async_dispatcher_send(
-                self.hass, f"{DOMAIN}_{self.entry_id}_update", "measurement_time", data
+                self.hass, f"{DOMAIN}_{self.entry_id}_update", "timestamp", data
+            )
+        elif source == "measurement_complete":
+            self._measurement_complete = data
+            async_dispatcher_send(
+                self.hass, f"{DOMAIN}_{self.entry_id}_update", "measurement_complete", data
             )
         elif source == "connected":
             self._connected = True
             self._connecting = False
-            self._last_seen = time.time()
             async_dispatcher_send(
                 self.hass, f"{DOMAIN}_{self.entry_id}_update", "connected", None
             )
         elif source == "disconnected":
             self._connected = False
             self._connecting = False
-            self._last_seen = time.time()
+            # НЕ обнуляем данные! Только отправляем статус
             async_dispatcher_send(
                 self.hass, f"{DOMAIN}_{self.entry_id}_update", "disconnected", None
             )
-        elif source == "measurement_complete":
-            # Измерение завершено, можно сбросить флаги
-            _LOGGER.debug("Measurement complete")
     
     async def _try_connect(self, now=None) -> None:
         """Try to connect to device."""
-        if self._shutdown:
+        if self._shutdown or self._connected or self._connecting:
             return
-        
-        # Если устройство отключилось больше 2 минут назад - принудительно сбрасываем
-        if not self._connected and self._last_seen:
-            time_since_disconnect = (time.time() - self._last_seen)
-            if time_since_disconnect > 120:  # 2 минуты
-                self._last_seen = None
-                # Пересоздаем устройство для очистки кэша
-                self.device = BloodPressureMonitor(self.address)
-                self.device.set_callback(self._handle_update)
-        
-        if self._connected or self._connecting:
-            return
-        
+            
         self._connecting = True
         
         try:
@@ -204,33 +192,38 @@ class BloodPressureCoordinator:
     
     @property
     def systolic(self) -> int:
-        """Current systolic pressure."""
+        """Systolic pressure."""
         return self._systolic
     
     @property
     def diastolic(self) -> int:
-        """Current diastolic pressure."""
+        """Diastolic pressure."""
         return self._diastolic
     
     @property
     def map(self) -> int:
-        """Current mean arterial pressure."""
+        """Mean Arterial Pressure."""
         return self._map
     
     @property
     def pulse(self) -> int:
-        """Current heart rate."""
+        """Heart rate."""
         return self._pulse
     
     @property
     def user_id(self) -> int:
-        """Current user ID."""
+        """User ID."""
         return self._user_id
     
     @property
-    def measurement_time(self) -> str:
-        """Last measurement time."""
-        return self._measurement_time
+    def timestamp(self) -> str | None:
+        """Measurement timestamp."""
+        return self._timestamp
+    
+    @property
+    def measurement_complete(self) -> bool:
+        """Measurement complete status."""
+        return self._measurement_complete
     
     @property
     def connected(self) -> bool:
