@@ -11,6 +11,6 @@ DEVICE_MODEL = "BU 575"
 BP_SERVICE_UUID = "00001810-0000-1000-8000-00805f9b34fb"
 BP_CHAR_UUID = "00002a35-0000-1000-8000-00805f9b34fb"
 
-# Update intervals
-SCAN_INTERVAL = timedelta(seconds=3)
-CONNECT_TIMEOUT = 10
+# Update intervals - УМЕНЬШАЕМ для более быстрого обнаружения!
+SCAN_INTERVAL = timedelta(seconds=2)  # Было 3, стало 2
+CONNECT_TIMEOUT = 5  # Было 10, стало 5
