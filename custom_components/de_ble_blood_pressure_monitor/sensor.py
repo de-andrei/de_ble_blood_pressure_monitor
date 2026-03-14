@@ -32,7 +32,7 @@ async def async_setup_entry(
         SystolicSensor(coordinator, entry),
         DiastolicSensor(coordinator, entry),
         MAPSensor(coordinator, entry),
-        HeartRateSensor(coordinator, entry),  # Переименовано для ясности
+        PulseSensor(coordinator, entry),  # Возвращаем PulseSensor
         UserIDSensor(coordinator, entry),
         TimestampSensor(coordinator, entry),
         MeasurementCompleteSensor(coordinator, entry),
@@ -177,14 +177,14 @@ class MAPSensor(SensorEntity):
         """Return the state."""
         return self.coordinator.map
 
-class HeartRateSensor(SensorEntity):
-    """Representation of heart rate / pulse sensor."""
+class PulseSensor(SensorEntity):
+    """Representation of pulse/heart rate sensor."""
 
-    # Явно указываем "bpm" как строку, без констант!
+    # Явно указываем "bpm" как строку
     _attr_native_unit_of_measurement = "bpm"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
-    _attr_name = "Heart Rate"
+    _attr_name = "Pulse"
     _attr_icon = "mdi:heart-pulse"
     _attr_available = True
     _attr_should_poll = False
@@ -192,7 +192,7 @@ class HeartRateSensor(SensorEntity):
     def __init__(self, coordinator, entry):
         """Initialize the sensor."""
         self.coordinator = coordinator
-        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_heart_rate"
+        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_pulse"  # Уникальный ID оставляем pulse
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.address)},
         )
@@ -205,7 +205,7 @@ class HeartRateSensor(SensorEntity):
         @callback
         def update(source: str, data: Any) -> None:
             """Update state."""
-            if source == "pulse":  # Обратите внимание: из coordinator приходит "pulse"
+            if source == "pulse":  # Слушаем событие "pulse" от координатора
                 self._attr_native_value = data
                 self.async_write_ha_state()
         
