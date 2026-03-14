@@ -60,15 +60,16 @@ class SystolicSensor(SensorEntity, RestoreEntity):
         )
         self._async_unsub_dispatcher = None
         self._attr_native_value = 0
+        self._received_first_update = False
 
     async def async_added_to_hass(self) -> None:
         """Restore last state."""
         await super().async_added_to_hass()
         
-        # Восстанавливаем последнее состояние
         if (last_state := await self.async_get_last_state()) is not None:
             try:
                 self._attr_native_value = float(last_state.state)
+                _LOGGER.debug(f"Restored {self.entity_id} = {self._attr_native_value}")
             except (ValueError, TypeError):
                 _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
@@ -76,7 +77,11 @@ class SystolicSensor(SensorEntity, RestoreEntity):
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "systolic":
+                if not self._received_first_update and data == 0:
+                    self._received_first_update = True
+                    return
                 self._attr_native_value = data
+                self._received_first_update = True
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
@@ -114,6 +119,7 @@ class DiastolicSensor(SensorEntity, RestoreEntity):
         )
         self._async_unsub_dispatcher = None
         self._attr_native_value = 0
+        self._received_first_update = False
 
     async def async_added_to_hass(self) -> None:
         """Restore last state."""
@@ -122,6 +128,7 @@ class DiastolicSensor(SensorEntity, RestoreEntity):
         if (last_state := await self.async_get_last_state()) is not None:
             try:
                 self._attr_native_value = float(last_state.state)
+                _LOGGER.debug(f"Restored {self.entity_id} = {self._attr_native_value}")
             except (ValueError, TypeError):
                 _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
@@ -129,7 +136,11 @@ class DiastolicSensor(SensorEntity, RestoreEntity):
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "diastolic":
+                if not self._received_first_update and data == 0:
+                    self._received_first_update = True
+                    return
                 self._attr_native_value = data
+                self._received_first_update = True
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
@@ -167,6 +178,7 @@ class MAPSensor(SensorEntity, RestoreEntity):
         )
         self._async_unsub_dispatcher = None
         self._attr_native_value = 0
+        self._received_first_update = False
 
     async def async_added_to_hass(self) -> None:
         """Restore last state."""
@@ -175,6 +187,7 @@ class MAPSensor(SensorEntity, RestoreEntity):
         if (last_state := await self.async_get_last_state()) is not None:
             try:
                 self._attr_native_value = float(last_state.state)
+                _LOGGER.debug(f"Restored {self.entity_id} = {self._attr_native_value}")
             except (ValueError, TypeError):
                 _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
@@ -182,7 +195,11 @@ class MAPSensor(SensorEntity, RestoreEntity):
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "map":
+                if not self._received_first_update and data == 0:
+                    self._received_first_update = True
+                    return
                 self._attr_native_value = data
+                self._received_first_update = True
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
@@ -220,6 +237,7 @@ class PulseSensor(SensorEntity, RestoreEntity):
         )
         self._async_unsub_dispatcher = None
         self._attr_native_value = 0
+        self._received_first_update = False
 
     async def async_added_to_hass(self) -> None:
         """Restore last state."""
@@ -228,6 +246,7 @@ class PulseSensor(SensorEntity, RestoreEntity):
         if (last_state := await self.async_get_last_state()) is not None:
             try:
                 self._attr_native_value = float(last_state.state)
+                _LOGGER.debug(f"Restored {self.entity_id} = {self._attr_native_value}")
             except (ValueError, TypeError):
                 _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
@@ -235,7 +254,11 @@ class PulseSensor(SensorEntity, RestoreEntity):
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "pulse":
+                if not self._received_first_update and data == 0:
+                    self._received_first_update = True
+                    return
                 self._attr_native_value = data
+                self._received_first_update = True
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
@@ -271,6 +294,7 @@ class UserIDSensor(SensorEntity, RestoreEntity):
         )
         self._async_unsub_dispatcher = None
         self._attr_native_value = 0
+        self._received_first_update = False
 
     async def async_added_to_hass(self) -> None:
         """Restore last state."""
@@ -279,6 +303,7 @@ class UserIDSensor(SensorEntity, RestoreEntity):
         if (last_state := await self.async_get_last_state()) is not None:
             try:
                 self._attr_native_value = int(float(last_state.state))
+                _LOGGER.debug(f"Restored {self.entity_id} = {self._attr_native_value}")
             except (ValueError, TypeError):
                 _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
@@ -286,7 +311,11 @@ class UserIDSensor(SensorEntity, RestoreEntity):
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "user_id":
+                if not self._received_first_update and data == 0:
+                    self._received_first_update = True
+                    return
                 self._attr_native_value = data
+                self._received_first_update = True
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
@@ -322,6 +351,7 @@ class TimestampSensor(SensorEntity, RestoreEntity):
         )
         self._async_unsub_dispatcher = None
         self._attr_native_value = None
+        self._received_first_update = False
 
     async def async_added_to_hass(self) -> None:
         """Restore last state."""
@@ -329,12 +359,17 @@ class TimestampSensor(SensorEntity, RestoreEntity):
         
         if (last_state := await self.async_get_last_state()) is not None:
             self._attr_native_value = last_state.state
+            _LOGGER.debug(f"Restored {self.entity_id} = {self._attr_native_value}")
         
         @callback
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "timestamp":
+                if not self._received_first_update and data is None:
+                    self._received_first_update = True
+                    return
                 self._attr_native_value = data
+                self._received_first_update = True
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
@@ -370,6 +405,7 @@ class MeasurementCompleteSensor(SensorEntity, RestoreEntity):
         )
         self._async_unsub_dispatcher = None
         self._attr_native_value = "Waiting"
+        self._received_first_update = False
 
     async def async_added_to_hass(self) -> None:
         """Restore last state."""
@@ -377,12 +413,18 @@ class MeasurementCompleteSensor(SensorEntity, RestoreEntity):
         
         if (last_state := await self.async_get_last_state()) is not None:
             self._attr_native_value = last_state.state
+            _LOGGER.debug(f"Restored {self.entity_id} = {self._attr_native_value}")
         
         @callback
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "measurement_complete":
-                self._attr_native_value = "Complete" if data else "Waiting"
+                new_value = "Complete" if data else "Waiting"
+                if not self._received_first_update and new_value == "Waiting":
+                    self._received_first_update = True
+                    return
+                self._attr_native_value = new_value
+                self._received_first_update = True
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
