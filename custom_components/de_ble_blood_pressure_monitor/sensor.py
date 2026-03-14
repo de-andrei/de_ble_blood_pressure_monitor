@@ -10,7 +10,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    PERCENTAGE,
     UnitOfPressure,
     UnitOfFrequency,
 )
@@ -36,6 +35,8 @@ async def async_setup_entry(
         MAPSensor(coordinator, entry),
         PulseSensor(coordinator, entry),
         UserIDSensor(coordinator, entry),
+        TimestampSensor(coordinator, entry),
+        MeasurementCompleteSensor(coordinator, entry),
         ConnectionSensor(coordinator, entry),
     ])
 
@@ -266,6 +267,94 @@ class UserIDSensor(SensorEntity):
     def native_value(self) -> int:
         """Return the state."""
         return self.coordinator.user_id
+
+class TimestampSensor(SensorEntity):
+    """Representation of measurement timestamp as sensor."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Last Measurement Time"
+    _attr_icon = "mdi:clock"
+    _attr_available = True
+    _attr_should_poll = False
+
+    def __init__(self, coordinator, entry):
+        """Initialize the sensor."""
+        self.coordinator = coordinator
+        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_timestamp"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.address)},
+        )
+        self._async_unsub_dispatcher = None
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added."""
+        await super().async_added_to_hass()
+        
+        @callback
+        def update(source: str, data: Any) -> None:
+            """Update state."""
+            if source == "timestamp":
+                self._attr_native_value = data
+                self.async_write_ha_state()
+        
+        self._async_unsub_dispatcher = async_dispatcher_connect(
+            self.hass, f"{DOMAIN}_{self.coordinator.entry_id}_update", update
+        )
+    
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity will be removed."""
+        if self._async_unsub_dispatcher:
+            self._async_unsub_dispatcher()
+        await super().async_will_remove_from_hass()
+    
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        return self.coordinator.timestamp
+
+class MeasurementCompleteSensor(SensorEntity):
+    """Representation of measurement complete status as sensor."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Measurement Complete"
+    _attr_icon = "mdi:check-circle"
+    _attr_available = True
+    _attr_should_poll = False
+
+    def __init__(self, coordinator, entry):
+        """Initialize the sensor."""
+        self.coordinator = coordinator
+        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_measurement_complete"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.address)},
+        )
+        self._async_unsub_dispatcher = None
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added."""
+        await super().async_added_to_hass()
+        
+        @callback
+        def update(source: str, data: Any) -> None:
+            """Update state."""
+            if source == "measurement_complete":
+                self._attr_native_value = data
+                self.async_write_ha_state()
+        
+        self._async_unsub_dispatcher = async_dispatcher_connect(
+            self.hass, f"{DOMAIN}_{self.coordinator.entry_id}_update", update
+        )
+    
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity will be removed."""
+        if self._async_unsub_dispatcher:
+            self._async_unsub_dispatcher()
+        await super().async_will_remove_from_hass()
+    
+    @property
+    def native_value(self) -> str:
+        """Return the state."""
+        return "Complete" if self.coordinator.measurement_complete else "Waiting"
 
 class ConnectionSensor(SensorEntity):
     """Representation of connection status."""
