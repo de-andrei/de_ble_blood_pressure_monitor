@@ -11,7 +11,6 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     UnitOfPressure,
-    UnitOfFrequency,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -181,7 +180,8 @@ class MAPSensor(SensorEntity):
 class PulseSensor(SensorEntity):
     """Representation of pulse sensor."""
 
-    _attr_native_unit_of_measurement = UnitOfFrequency.HERTZ
+    # Используем строку "bpm" вместо константы UnitOfFrequency.HERTZ
+    _attr_native_unit_of_measurement = "bpm"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
     _attr_name = "Pulse"
