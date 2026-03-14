@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
 
@@ -32,14 +33,14 @@ async def async_setup_entry(
         SystolicSensor(coordinator, entry),
         DiastolicSensor(coordinator, entry),
         MAPSensor(coordinator, entry),
-        PulseSensor(coordinator, entry),  # Возвращаем PulseSensor
+        PulseSensor(coordinator, entry),
         UserIDSensor(coordinator, entry),
         TimestampSensor(coordinator, entry),
         MeasurementCompleteSensor(coordinator, entry),
         ConnectionSensor(coordinator, entry),
     ])
 
-class SystolicSensor(SensorEntity):
+class SystolicSensor(SensorEntity, RestoreEntity):
     """Representation of systolic pressure sensor."""
 
     _attr_native_unit_of_measurement = UnitOfPressure.MMHG
@@ -58,10 +59,18 @@ class SystolicSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.address)},
         )
         self._async_unsub_dispatcher = None
+        self._attr_native_value = 0
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
+        """Restore last state."""
         await super().async_added_to_hass()
+        
+        # Восстанавливаем последнее состояние
+        if (last_state := await self.async_get_last_state()) is not None:
+            try:
+                self._attr_native_value = float(last_state.state)
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
         @callback
         def update(source: str, data: Any) -> None:
@@ -81,11 +90,11 @@ class SystolicSensor(SensorEntity):
         await super().async_will_remove_from_hass()
     
     @property
-    def native_value(self) -> int:
+    def native_value(self) -> float:
         """Return the state."""
-        return self.coordinator.systolic
+        return self._attr_native_value
 
-class DiastolicSensor(SensorEntity):
+class DiastolicSensor(SensorEntity, RestoreEntity):
     """Representation of diastolic pressure sensor."""
 
     _attr_native_unit_of_measurement = UnitOfPressure.MMHG
@@ -104,10 +113,17 @@ class DiastolicSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.address)},
         )
         self._async_unsub_dispatcher = None
+        self._attr_native_value = 0
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
+        """Restore last state."""
         await super().async_added_to_hass()
+        
+        if (last_state := await self.async_get_last_state()) is not None:
+            try:
+                self._attr_native_value = float(last_state.state)
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
         @callback
         def update(source: str, data: Any) -> None:
@@ -127,11 +143,11 @@ class DiastolicSensor(SensorEntity):
         await super().async_will_remove_from_hass()
     
     @property
-    def native_value(self) -> int:
+    def native_value(self) -> float:
         """Return the state."""
-        return self.coordinator.diastolic
+        return self._attr_native_value
 
-class MAPSensor(SensorEntity):
+class MAPSensor(SensorEntity, RestoreEntity):
     """Representation of Mean Arterial Pressure sensor."""
 
     _attr_native_unit_of_measurement = UnitOfPressure.MMHG
@@ -150,10 +166,17 @@ class MAPSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.address)},
         )
         self._async_unsub_dispatcher = None
+        self._attr_native_value = 0
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
+        """Restore last state."""
         await super().async_added_to_hass()
+        
+        if (last_state := await self.async_get_last_state()) is not None:
+            try:
+                self._attr_native_value = float(last_state.state)
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
         @callback
         def update(source: str, data: Any) -> None:
@@ -173,14 +196,13 @@ class MAPSensor(SensorEntity):
         await super().async_will_remove_from_hass()
     
     @property
-    def native_value(self) -> int:
+    def native_value(self) -> float:
         """Return the state."""
-        return self.coordinator.map
+        return self._attr_native_value
 
-class PulseSensor(SensorEntity):
+class PulseSensor(SensorEntity, RestoreEntity):
     """Representation of pulse/heart rate sensor."""
 
-    # Явно указываем "bpm" как строку
     _attr_native_unit_of_measurement = "bpm"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
@@ -192,20 +214,27 @@ class PulseSensor(SensorEntity):
     def __init__(self, coordinator, entry):
         """Initialize the sensor."""
         self.coordinator = coordinator
-        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_pulse"  # Уникальный ID оставляем pulse
+        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_pulse"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.address)},
         )
         self._async_unsub_dispatcher = None
+        self._attr_native_value = 0
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
+        """Restore last state."""
         await super().async_added_to_hass()
+        
+        if (last_state := await self.async_get_last_state()) is not None:
+            try:
+                self._attr_native_value = float(last_state.state)
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
         @callback
         def update(source: str, data: Any) -> None:
             """Update state."""
-            if source == "pulse":  # Слушаем событие "pulse" от координатора
+            if source == "pulse":
                 self._attr_native_value = data
                 self.async_write_ha_state()
         
@@ -220,11 +249,11 @@ class PulseSensor(SensorEntity):
         await super().async_will_remove_from_hass()
     
     @property
-    def native_value(self) -> int:
+    def native_value(self) -> float:
         """Return the state."""
-        return self.coordinator.pulse
+        return self._attr_native_value
 
-class UserIDSensor(SensorEntity):
+class UserIDSensor(SensorEntity, RestoreEntity):
     """Representation of user ID sensor."""
 
     _attr_has_entity_name = True
@@ -241,10 +270,17 @@ class UserIDSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.address)},
         )
         self._async_unsub_dispatcher = None
+        self._attr_native_value = 0
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
+        """Restore last state."""
         await super().async_added_to_hass()
+        
+        if (last_state := await self.async_get_last_state()) is not None:
+            try:
+                self._attr_native_value = int(float(last_state.state))
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not restore state for %s", self.entity_id)
         
         @callback
         def update(source: str, data: Any) -> None:
@@ -266,9 +302,9 @@ class UserIDSensor(SensorEntity):
     @property
     def native_value(self) -> int:
         """Return the state."""
-        return self.coordinator.user_id
+        return int(self._attr_native_value) if self._attr_native_value else 0
 
-class TimestampSensor(SensorEntity):
+class TimestampSensor(SensorEntity, RestoreEntity):
     """Representation of measurement timestamp as sensor."""
 
     _attr_has_entity_name = True
@@ -285,10 +321,14 @@ class TimestampSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.address)},
         )
         self._async_unsub_dispatcher = None
+        self._attr_native_value = None
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
+        """Restore last state."""
         await super().async_added_to_hass()
+        
+        if (last_state := await self.async_get_last_state()) is not None:
+            self._attr_native_value = last_state.state
         
         @callback
         def update(source: str, data: Any) -> None:
@@ -310,9 +350,9 @@ class TimestampSensor(SensorEntity):
     @property
     def native_value(self) -> str | None:
         """Return the state."""
-        return self.coordinator.timestamp
+        return self._attr_native_value
 
-class MeasurementCompleteSensor(SensorEntity):
+class MeasurementCompleteSensor(SensorEntity, RestoreEntity):
     """Representation of measurement complete status as sensor."""
 
     _attr_has_entity_name = True
@@ -329,16 +369,20 @@ class MeasurementCompleteSensor(SensorEntity):
             identifiers={(DOMAIN, coordinator.address)},
         )
         self._async_unsub_dispatcher = None
+        self._attr_native_value = "Waiting"
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
+        """Restore last state."""
         await super().async_added_to_hass()
+        
+        if (last_state := await self.async_get_last_state()) is not None:
+            self._attr_native_value = last_state.state
         
         @callback
         def update(source: str, data: Any) -> None:
             """Update state."""
             if source == "measurement_complete":
-                self._attr_native_value = data
+                self._attr_native_value = "Complete" if data else "Waiting"
                 self.async_write_ha_state()
         
         self._async_unsub_dispatcher = async_dispatcher_connect(
@@ -354,10 +398,10 @@ class MeasurementCompleteSensor(SensorEntity):
     @property
     def native_value(self) -> str:
         """Return the state."""
-        return "Complete" if self.coordinator.measurement_complete else "Waiting"
+        return self._attr_native_value
 
 class ConnectionSensor(SensorEntity):
-    """Representation of connection status."""
+    """Representation of connection status (no restore needed)."""
 
     _attr_has_entity_name = True
     _attr_name = "Connection Status"
