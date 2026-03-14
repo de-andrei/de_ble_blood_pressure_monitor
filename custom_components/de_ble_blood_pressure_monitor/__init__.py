@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -76,6 +77,7 @@ class BloodPressureCoordinator:
         self._pulse = 0
         self._user_id = 0
         self._measurement_time = ""
+        self._last_seen: float | None = None
         self._cancel_scan: callable | None = None
         self._connecting = False
         self._shutdown = False
@@ -145,21 +147,38 @@ class BloodPressureCoordinator:
         elif source == "connected":
             self._connected = True
             self._connecting = False
+            self._last_seen = time.time()
             async_dispatcher_send(
                 self.hass, f"{DOMAIN}_{self.entry_id}_update", "connected", None
             )
         elif source == "disconnected":
             self._connected = False
             self._connecting = False
+            self._last_seen = time.time()
             async_dispatcher_send(
                 self.hass, f"{DOMAIN}_{self.entry_id}_update", "disconnected", None
             )
+        elif source == "measurement_complete":
+            # Измерение завершено, можно сбросить флаги
+            _LOGGER.debug("Measurement complete")
     
     async def _try_connect(self, now=None) -> None:
         """Try to connect to device."""
-        if self._shutdown or self._connected or self._connecting:
+        if self._shutdown:
             return
-            
+        
+        # Если устройство отключилось больше 2 минут назад - принудительно сбрасываем
+        if not self._connected and self._last_seen:
+            time_since_disconnect = (time.time() - self._last_seen)
+            if time_since_disconnect > 120:  # 2 минуты
+                self._last_seen = None
+                # Пересоздаем устройство для очистки кэша
+                self.device = BloodPressureMonitor(self.address)
+                self.device.set_callback(self._handle_update)
+        
+        if self._connected or self._connecting:
+            return
+        
         self._connecting = True
         
         try:
