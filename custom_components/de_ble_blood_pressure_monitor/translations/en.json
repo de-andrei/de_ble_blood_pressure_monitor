@@ -1,0 +1,19 @@
+{
+  "config": {
+    "flow_title": "Blood Pressure Monitor",
+    "step": {
+      "user": {
+        "title": "Select Blood Pressure Monitor",
+        "description": "Choose your Medisana BU 575 from the list",
+        "data": {
+          "address": "Device"
+        }
+      }
+    },
+    "abort": {
+      "no_devices_found": "No blood pressure monitors found. Make sure the device is on and nearby.",
+      "not_supported_device": "This device is not a supported blood pressure monitor",
+      "already_configured": "This device is already configured"
+    }
+  }
+}

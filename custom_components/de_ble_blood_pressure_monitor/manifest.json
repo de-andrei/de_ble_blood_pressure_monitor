@@ -1,0 +1,18 @@
+{
+  "domain": "de_ble_blood_pressure_monitor",
+  "name": "DE BLE Blood Pressure Monitor",
+  "codeowners": ["@de-andrei"],
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://github.com/de-andrei/de_ble_blood_pressure_monitor",
+  "issue_tracker": "https://github.com/de-andrei/de_ble_blood_pressure_monitor/issues",
+  "integration_type": "device",
+  "bluetooth": [
+    {
+      "service_uuid": "00001810-0000-1000-8000-00805f9b34fb",
+      "connectable": true
+    }
+  ],
+  "requirements": ["bleak>=0.20.2"],
+  "version": "1.0.0"
+}
