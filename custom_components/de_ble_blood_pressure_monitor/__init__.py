@@ -23,7 +23,8 @@ from .ble_device import BloodPressureMonitor
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.setLevel(logging.WARNING)
 
-PLATFORMS = ["sensor", "text_sensor", "binary_sensor"]
+# Убираем text_sensor и binary_sensor, оставляем только sensor
+PLATFORMS = ["sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up DE BLE Blood Pressure Monitor from a config entry."""
@@ -157,7 +158,6 @@ class BPCoordinator:
         elif source == "disconnected":
             self._connected = False
             self._connecting = False
-            # НЕ обнуляем данные! Только отправляем статус
             async_dispatcher_send(
                 self.hass, f"{DOMAIN}_{self.entry_id}_update", "disconnected", None
             )
