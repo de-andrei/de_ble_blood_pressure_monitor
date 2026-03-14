@@ -34,7 +34,6 @@ class DEBleBloodPressureMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the bluetooth discovery step."""
         _LOGGER.debug("Discovered device: %s", discovery_info)
         
-        # Проверяем, что это наш тонометр по UUID сервиса
         if BP_SERVICE_UUID not in discovery_info.service_uuids:
             return self.async_abort(reason="not_supported_device")
         
@@ -62,7 +61,6 @@ class DEBleBloodPressureMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        # Собираем все обнаруженные тонометры
         current_addresses = self._async_current_ids()
         for discovery_info in async_discovered_service_info(self.hass):
             if discovery_info.address in current_addresses:
@@ -73,7 +71,6 @@ class DEBleBloodPressureMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
         if not self._discovered_devices:
             return self.async_abort(reason="no_devices_found")
 
-        # Создаем список для выбора
         devices = {
             address: f"{info.name or 'Blood Pressure Monitor'} ({address})"
             for address, info in self._discovered_devices.items()
