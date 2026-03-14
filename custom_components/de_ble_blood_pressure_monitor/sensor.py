@@ -9,7 +9,11 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import (
+    PERCENTAGE,
+    UnitOfPressure,
+    UnitOfFrequency,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
@@ -31,18 +35,17 @@ async def async_setup_entry(
         DiastolicSensor(coordinator, entry),
         MAPSensor(coordinator, entry),
         PulseSensor(coordinator, entry),
-        UserIdSensor(coordinator, entry),
-        MeasurementTimeSensor(coordinator, entry),
+        UserIDSensor(coordinator, entry),
         ConnectionSensor(coordinator, entry),
     ])
 
 class SystolicSensor(SensorEntity):
-    """Representation of Systolic Pressure sensor."""
+    """Representation of systolic pressure sensor."""
 
-    _attr_native_unit_of_measurement = "mmHg"
+    _attr_native_unit_of_measurement = UnitOfPressure.MMHG
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
-    _attr_name = "Systolic Pressure"
+    _attr_name = "Systolic"
     _attr_icon = "mdi:heart"
     _attr_available = True
     _attr_should_poll = False
@@ -79,16 +82,16 @@ class SystolicSensor(SensorEntity):
     
     @property
     def native_value(self) -> int:
-        """Return the state. Shows last known value."""
+        """Return the state."""
         return self.coordinator.systolic
 
 class DiastolicSensor(SensorEntity):
-    """Representation of Diastolic Pressure sensor."""
+    """Representation of diastolic pressure sensor."""
 
-    _attr_native_unit_of_measurement = "mmHg"
+    _attr_native_unit_of_measurement = UnitOfPressure.MMHG
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
-    _attr_name = "Diastolic Pressure"
+    _attr_name = "Diastolic"
     _attr_icon = "mdi:heart-outline"
     _attr_available = True
     _attr_should_poll = False
@@ -125,13 +128,13 @@ class DiastolicSensor(SensorEntity):
     
     @property
     def native_value(self) -> int:
-        """Return the state. Shows last known value."""
+        """Return the state."""
         return self.coordinator.diastolic
 
 class MAPSensor(SensorEntity):
     """Representation of Mean Arterial Pressure sensor."""
 
-    _attr_native_unit_of_measurement = "mmHg"
+    _attr_native_unit_of_measurement = UnitOfPressure.MMHG
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
     _attr_name = "Mean Arterial Pressure"
@@ -171,16 +174,16 @@ class MAPSensor(SensorEntity):
     
     @property
     def native_value(self) -> int:
-        """Return the state. Shows last known value."""
+        """Return the state."""
         return self.coordinator.map
 
 class PulseSensor(SensorEntity):
-    """Representation of Heart Rate sensor."""
+    """Representation of pulse sensor."""
 
-    _attr_native_unit_of_measurement = "bpm"
+    _attr_native_unit_of_measurement = UnitOfFrequency.HERTZ
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
-    _attr_name = "Heart Rate"
+    _attr_name = "Pulse"
     _attr_icon = "mdi:heart-pulse"
     _attr_available = True
     _attr_should_poll = False
@@ -217,13 +220,12 @@ class PulseSensor(SensorEntity):
     
     @property
     def native_value(self) -> int:
-        """Return the state. Shows last known value."""
+        """Return the state."""
         return self.coordinator.pulse
 
-class UserIdSensor(SensorEntity):
-    """Representation of User ID sensor."""
+class UserIDSensor(SensorEntity):
+    """Representation of user ID sensor."""
 
-    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
     _attr_name = "User ID"
     _attr_icon = "mdi:account"
@@ -262,52 +264,8 @@ class UserIdSensor(SensorEntity):
     
     @property
     def native_value(self) -> int:
-        """Return the state. Shows last known value."""
+        """Return the state."""
         return self.coordinator.user_id
-
-class MeasurementTimeSensor(SensorEntity):
-    """Representation of Last Measurement Time sensor."""
-
-    _attr_has_entity_name = True
-    _attr_name = "Last Measurement Time"
-    _attr_icon = "mdi:clock"
-    _attr_available = True
-    _attr_should_poll = False
-
-    def __init__(self, coordinator, entry):
-        """Initialize the sensor."""
-        self.coordinator = coordinator
-        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_measurement_time"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.address)},
-        )
-        self._async_unsub_dispatcher = None
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added."""
-        await super().async_added_to_hass()
-        
-        @callback
-        def update(source: str, data: Any) -> None:
-            """Update state."""
-            if source == "measurement_time":
-                self._attr_native_value = data
-                self.async_write_ha_state()
-        
-        self._async_unsub_dispatcher = async_dispatcher_connect(
-            self.hass, f"{DOMAIN}_{self.coordinator.entry_id}_update", update
-        )
-    
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity will be removed."""
-        if self._async_unsub_dispatcher:
-            self._async_unsub_dispatcher()
-        await super().async_will_remove_from_hass()
-    
-    @property
-    def native_value(self) -> str:
-        """Return the state. Shows last known value."""
-        return self.coordinator.measurement_time or "No measurement"
 
 class ConnectionSensor(SensorEntity):
     """Representation of connection status."""
