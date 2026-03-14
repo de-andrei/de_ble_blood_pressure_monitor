@@ -3,10 +3,12 @@
 import asyncio
 import logging
 import struct
+import subprocess
 from typing import Optional, Callable, Any, Union
 
-from bleak import BleakClient, BleakScanner
+from bleak import BleakClient
 from bleak.backends.device import BLEDevice
+from bleak_retry_connector import establish_connection, get_device
 
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.setLevel(logging.WARNING)
@@ -35,6 +37,7 @@ class BloodPressureMonitor:
         self._user_id: int = 0
         self._measurement_time: str = ""
         self._callback: Optional[Callable[[str, Any], None]] = None
+        self._loop = asyncio.get_running_loop()
         
     def set_callback(self, callback: Callable[[str, Any], None]) -> None:
         """Set callback for data updates."""
@@ -51,6 +54,34 @@ class BloodPressureMonitor:
             mantissa = -((0x0FFF + 1) - mantissa)
         
         return mantissa * (10 ** exponent)
+    
+    async def _clear_bluez_cache(self) -> None:
+        """Принудительно удалить устройство из кэша BlueZ."""
+        try:
+            # Удаляем устройство из кэша BlueZ через bluetoothctl
+            process = await asyncio.create_subprocess_exec(
+                'bluetoothctl', 'remove', self.address,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await process.communicate()
+            
+            # Дополнительно сбрасываем адаптер (мягко)
+            process = await asyncio.create_subprocess_exec(
+                'hciconfig', 'hci0', 'reset',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await process.communicate()
+            
+            _LOGGER.debug(f"Cleared BlueZ cache for {self.address}")
+        except Exception:
+            pass  # Игнорируем ошибки, это не критично
+    
+    async def _delayed_disconnect(self, delay: float = 0.5) -> None:
+        """Отключение с задержкой после получения данных."""
+        await asyncio.sleep(delay)
+        await self.async_disconnect()
         
     def _notification_handler(self, sender: int, data: bytearray) -> None:
         """Handle incoming notifications."""
@@ -112,32 +143,49 @@ class BloodPressureMonitor:
                 self._user_id = data[offset]
                 if self._callback:
                     self._callback("user_id", self._user_id)
-                    
-        except Exception:
-            pass
+            
+            # Сигнализируем о завершении измерения и запускаем отключение
+            if self._callback:
+                self._callback("measurement_complete", None)
+            
+            # Запускаем отключение с задержкой
+            asyncio.create_task(self._delayed_disconnect(0.5))
+            
+        except Exception as e:
+            _LOGGER.debug(f"Error in notification handler: {e}")
     
     def _disconnected_callback(self, client: BleakClient) -> None:
         """Handle disconnection."""
         self.client = None
         if self._callback:
             self._callback("disconnected", None)
+        # Очищаем кэш BlueZ после отключения
+        asyncio.create_task(self._clear_bluez_cache())
     
     async def async_connect(self) -> bool:
-        """Connect to blood pressure monitor and enable notifications."""
+        """Connect to blood pressure monitor with retry logic."""
         try:
+            # Принудительно ищем устройство заново, игнорируя кэш
+            self.ble_device = await get_device(
+                self.address,
+                timeout=3.0,
+                lookup_device=True  # Заставляет искать заново
+            )
             if not self.ble_device:
-                self.ble_device = await BleakScanner.find_device_by_address(
-                    self.address, timeout=3.0
-                )
-                if not self.ble_device:
-                    return False
+                return False
             
-            self.client = BleakClient(
+            # Устанавливаем соединение с retry логикой
+            self.client = await establish_connection(
+                BleakClient,
                 self.ble_device,
-                disconnected_callback=self._disconnected_callback
+                self.address,
+                disconnected_callback=self._disconnected_callback,
+                max_attempts=3,
+                use_services_cache=False,  # Не используем кэш сервисов
+                ble_device_callback=lambda: self.ble_device,
             )
             
-            await self.client.connect(timeout=8.0)
+            # Подписываемся на уведомления
             await self.client.start_notify(
                 BP_CHAR_UUID,
                 self._notification_handler
@@ -148,7 +196,8 @@ class BloodPressureMonitor:
             
             return True
             
-        except Exception:
+        except Exception as e:
+            _LOGGER.debug(f"Connection failed: {e}")
             self.client = None
             return False
     
@@ -164,6 +213,8 @@ class BloodPressureMonitor:
                 self.client = None
                 if self._callback:
                     self._callback("disconnected", None)
+                # Очищаем кэш после отключения
+                await self._clear_bluez_cache()
     
     @property
     def systolic(self) -> int:
@@ -203,6 +254,8 @@ class BloodPressureMonitor:
     @staticmethod
     async def discover_devices(timeout: float = 5.0) -> list[BLEDevice]:
         """Discover nearby blood pressure monitors."""
+        from bleak import BleakScanner
+        
         devices = []
         
         def detection_callback(device: BLEDevice, advertisement_data):
