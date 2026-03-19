@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.components import bluetooth
 
 from .const import (
     DOMAIN,
@@ -23,7 +24,6 @@ from .ble_device import BloodPressureMonitor
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.setLevel(logging.WARNING)
 
-# Убираем text_sensor и binary_sensor, оставляем только sensor
 PLATFORMS = ["sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -34,6 +34,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_setup()
     
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    @callback
+    def _device_seen(
+        service_info: bluetooth.BluetoothServiceInfoBleak,
+        change: bluetooth.BluetoothChange,
+    ) -> None:
+        """Мгновенная реакция на появление тонометра."""
+        _LOGGER.debug("Тонометр %s обнаружен, запускаю подключение...", address)
+        # Немедленно запускаем подключение, не ждем интервала
+        hass.async_create_task(coordinator.async_connect_now())
+
+    # Регистрируем callback на все время работы интеграции
+    entry.async_on_unload(
+        bluetooth.async_register_callback(
+            hass,
+            _device_seen,
+            {"address": address, "connectable": True},
+            bluetooth.BluetoothScanningMode.ACTIVE,
+        )
+    )
     
     async def _async_shutdown(event):
         await coordinator.async_shutdown()
@@ -93,11 +113,45 @@ class BPCoordinator:
             self.hass, self._try_connect, SCAN_INTERVAL
         )
         
-        for _ in range(3):
-            await self._try_connect()
-            if self._connected:
-                break
-            await asyncio.sleep(1)
+        # Не делаем сразу несколько попыток, полагаемся на callback
+        
+    async def async_connect_now(self) -> None:
+        """Немедленная попытка подключения при появлении устройства."""
+        if self._connected or self._connecting or self._shutdown:
+            return
+
+        self._connecting = True
+        _LOGGER.debug("Немедленное подключение к %s", self.address)
+        
+        try:
+            # Отменяем следующий плановый скан, чтобы не мешал
+            if self._cancel_scan:
+                self._cancel_scan()
+                self._cancel_scan = None
+
+            if self.device:
+                success = await self.device.async_connect()
+                if not success:
+                    self._connecting = False
+                    # Если не вышло, перезапускаем плановое сканирование
+                    self._restart_periodic_scan()
+                # Если успешно, _connecting сбросится в _handle_update
+        except Exception as e:
+            _LOGGER.debug("Немедленное подключение не удалось: %s", e)
+            self._connecting = False
+            self._restart_periodic_scan()
+
+    def _restart_periodic_scan(self) -> None:
+        """Перезапустить плановое сканирование."""
+        from homeassistant.helpers.event import async_track_time_interval
+        
+        if self._shutdown:
+            return
+            
+        if not self._cancel_scan:
+            self._cancel_scan = async_track_time_interval(
+                self.hass, self._try_connect, SCAN_INTERVAL
+            )
         
     async def _register_device(self) -> None:
         """Register device in device registry."""
@@ -163,7 +217,7 @@ class BPCoordinator:
             )
     
     async def _try_connect(self, now=None) -> None:
-        """Try to connect to device."""
+        """Try to connect to device (плановое сканирование)."""
         if self._shutdown or self._connected or self._connecting:
             return
             
