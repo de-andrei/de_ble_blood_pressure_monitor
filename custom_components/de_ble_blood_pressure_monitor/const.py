@@ -11,6 +11,6 @@ DEVICE_MODEL = "BU 575"
 BP_SERVICE_UUID = "00001810-0000-1000-8000-00805f9b34fb"
 BP_CHAR_UUID = "00002a35-0000-1000-8000-00805f9b34fb"
 
-# Update intervals - можно увеличить, так как полагаемся на callback
+# Update intervals
 SCAN_INTERVAL = timedelta(seconds=10)
 CONNECT_TIMEOUT = 10
