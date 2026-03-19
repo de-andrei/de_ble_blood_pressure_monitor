@@ -8,6 +8,7 @@ from datetime import datetime
 
 from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
+from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.setLevel(logging.WARNING)
@@ -40,7 +41,7 @@ class BloodPressureMonitor:
             self.address = address_or_ble_device
             self.ble_device = None
             
-        self.client: Optional[BleakClient] = None
+        self.client: Optional[BleakClientWithServiceCache] = None
         self._systolic = 0
         self._diastolic = 0
         self._map = 0  # Mean Arterial Pressure
@@ -49,6 +50,7 @@ class BloodPressureMonitor:
         self._timestamp: Optional[datetime] = None
         self._measurement_complete = False
         self._callback: Optional[Callable[[str, Any], None]] = None
+        self._disconnect_called = False
         
     def set_callback(self, callback: Callable[[str, Any], None]) -> None:
         """Set callback for data updates."""
@@ -129,42 +131,60 @@ class BloodPressureMonitor:
     
     def _disconnected_callback(self, client: BleakClient) -> None:
         """Handle disconnection."""
+        _LOGGER.debug("Device %s disconnected", self.address)
         self.client = None
-        if self._callback:
+        if self._callback and not self._disconnect_called:
             self._callback("disconnected", None)
     
     async def async_connect(self) -> bool:
         """Connect to blood pressure monitor and enable notifications."""
+        if self.client and self.client.is_connected:
+            return True
+            
+        self._disconnect_called = False
+        
         try:
             if not self.ble_device:
                 self.ble_device = await BleakScanner.find_device_by_address(
                     self.address, timeout=3.0
                 )
                 if not self.ble_device:
+                    _LOGGER.debug("Device %s not found", self.address)
                     return False
             
-            self.client = BleakClient(
+            _LOGGER.debug("Connecting to %s", self.address)
+            
+            # Используем establish_connection из bleak-retry-connector
+            self.client = await establish_connection(
+                BleakClientWithServiceCache,
                 self.ble_device,
-                disconnected_callback=self._disconnected_callback
+                self.address,
+                self._disconnected_callback,
+                max_attempts=3,
+                use_services_cache=True,
             )
             
-            await self.client.connect(timeout=8.0)
+            # Подписываемся на уведомления
             await self.client.start_notify(
                 BP_CHAR_UUID,
                 self._notification_handler
             )
+            
+            _LOGGER.debug("Connected to %s", self.address)
             
             if self._callback:
                 self._callback("connected", None)
             
             return True
             
-        except Exception:
+        except Exception as e:
+            _LOGGER.debug("Connection failed: %s", e)
             self.client = None
             return False
     
     async def async_disconnect(self) -> None:
         """Disconnect from monitor."""
+        self._disconnect_called = True
         if self.client and self.client.is_connected:
             try:
                 await self.client.stop_notify(BP_CHAR_UUID)
